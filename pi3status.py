@@ -7,6 +7,7 @@ import json
 import time
 import re
 import signal
+import _thread
 
 INTERVAL_SECONDS = 2.0
 
@@ -14,6 +15,19 @@ def blink(toggle=False):
     blink.on = not blink.on
     return blink.on
 blink.on = True
+
+def cpu_usage():
+    while True:
+        # 2 1 means: collect cpu usage over 2 seconds, taking 1 reading (and then exiting)
+        raw = os.popen(f"mpstat 2 1").read()
+        percent = int(re.search(
+            r'all\s+(\d+)', raw
+        ).groups()[0])
+        cpu_usage.percent = percent
+        time.sleep(1)
+cpu_usage.percent = 0
+
+_thread.start_new_thread(cpu_usage, ())
 
 def pa_volume(label: str):
     vol = re.search(
@@ -92,10 +106,7 @@ def battery():
     }
 
 def cpu():
-    raw = os.popen('mpstat 1 1').read()
-    percent = int(re.search(
-        r'all\s+(\d+)', raw
-    ).groups()[0])
+    percent = cpu_usage.percent
     text = "CPU {0}%".format(percent)
     return {
         "color": "#ffffff" if percent < 90 else '#ff0000',
@@ -192,7 +203,7 @@ statusbar(
     lambda: alsa_volume('♪ {0}', 'Master'),
     lambda: alsa_volume('🎤 {0}', 'Mic'),
     lambda: pa_volume('♪PA'),
-    #lambda: cpu(),
+    lambda: cpu(),
     lambda: vpn(),
     lambda: battery(),
     lambda: clock('%d %b %H:%M'),
