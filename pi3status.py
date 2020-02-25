@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 #
 # A status bar app for the i3 window manager
 #
@@ -6,6 +6,7 @@ import os
 import json
 import time
 import re
+import signal
 
 INTERVAL_SECONDS = 2.0
 
@@ -164,26 +165,34 @@ def statusbar(*widgets):
                 "separator": True
             }
 
-    print('{"version":1}')
-    print('[')
-
-    while True:
+    def update():
         print(
             json.dumps(
                 list(map(safe_run, widgets))
             ),
             flush=True
         )
+        print (',', end='')
+
+    def handler(signum, frame):
+        update()
+
+    signal.signal(signal.SIGRTMIN+2, handler)
+
+    print('{"version":1}')
+    print('[')
+
+    while True:
+        update()
         time.sleep(INTERVAL_SECONDS)
         blink(toggle=True)
-        print (',', end='')
 
 statusbar(
     lambda: net('wlp3s0', ''),
     lambda: alsa_volume('♪ {0}', 'Master'),
     lambda: alsa_volume('🎤 {0}', 'Mic'),
     lambda: pa_volume('♪PA'),
-    lambda: cpu(),
+    #lambda: cpu(),
     lambda: vpn(),
     lambda: battery(),
     lambda: clock('%d %b %H:%M'),
