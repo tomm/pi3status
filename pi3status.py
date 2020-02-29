@@ -137,6 +137,22 @@ def clock(fmt: str):
         "separator": True
     }
 
+def free_memory(label: str):
+    lines = open('/proc/meminfo').read().split('\n')
+    total = int([i.split()[1] for i in lines if re.search(r'^MemTotal:', i)][0])
+    avail = int([i.split()[1] for i in lines if re.search(r'^MemAvailable:', i)][0])
+    percent = 100-100*avail//total
+
+    text = "{0}{1}%".format(label or '', percent)
+    return {
+        "color": "#ffffff" if percent < 80 else '#ff0000',
+        "short_text": text,
+        "full_text": text,
+        "markup": "none",
+        "separator": True
+    }
+
+
 def _get_up_dn_net_transferred(device: str):
     raw = list(filter(lambda line: line.split()[0:1]==[device+':'], open('/proc/net/dev').read().split('\n')))[0].split()
     down_bytes = int(raw[1])
@@ -204,6 +220,7 @@ statusbar(
     lambda: alsa_volume('🎤 {0}', 'Mic'),
     lambda: pa_volume('♪PA'),
     lambda: cpu(),
+    lambda: free_memory('RAM '),
     lambda: vpn(),
     lambda: battery(),
     lambda: clock('%d %b %H:%M'),
