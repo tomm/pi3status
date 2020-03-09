@@ -26,19 +26,34 @@ def cpu_usage():
         cpu_usage.percent = percent
         time.sleep(1)
 cpu_usage.percent = 0
-
 _thread.start_new_thread(cpu_usage, ())
 
-def pa_volume(label: str):
+ping_hosts = []
+def _ping():
+    while True:
+        for host in ping_hosts:
+            raw = os.popen('ping -c 1 {0}'.format(host)).read()
+            latency = re.search(
+                r'time=(\d+\.?\d* \w+)', raw
+            )
+            if latency is None:
+                _ping.latency[host] = '∞'
+            else:
+                _ping.latency[host] = latency.groups()[0]
+        time.sleep(30)
+_ping.latency = {}
+_thread.start_new_thread(_ping, ())
+
+
+def pa_volume(label: str, kind):  # kind: 'sources' | 'sinks'
+    raw = os.popen('pactl list {0}'.format(kind)).read().split('\n')
     vol = re.search(
         r'(\d+)%',
-        list(filter(
-            lambda l: re.match(r'^Volume', l.strip()),
-            os.popen('pactl list sinks').read().split('\n')
-        ))[0]
+        list(filter(lambda l: re.match(r'^Volume', l.strip()), raw))[0]
     ).groups()[0]
+    muted = len(list(filter(lambda l: re.match(r'^Mute: yes$', l.strip()), raw)))
 
-    text = '{0} {1}%'.format(label, vol)
+    text = '{0} {1}'.format(label, 'muted' if muted else vol+'%')
     return {
         "color": "#ffffff",
         "short_text": text,
@@ -46,6 +61,12 @@ def pa_volume(label: str):
         "markup": "none",
         "separator": True
     }
+
+def pa_mic_volume(label: str):
+    return pa_volume(label, 'sources')
+
+def pa_out_volume(label: str):
+    return pa_volume(label, 'sinks')
 
 def alsa_volume(format: str, control: str):
     raw = os.popen('amixer -c0 get {0}'.format(control)).read()
@@ -75,30 +96,45 @@ def battery():
         r'(\w+), (\d+)%', raw
     ).groups()
     duration = re.search(
-        r'(\d\d:\d\d:\d\d)', raw
+        r'(\d\d):(\d\d):(\d\d)', raw
     )
 
     percent = int(percent)
     if duration:
-        duration = time.strptime(duration.groups()[0], '%H:%M:%S')
-        mins_left = duration.tm_hour*60 + duration.tm_min
+        hours, mins, secs = map(int, duration.groups())
+        mins_left = hours*60 + mins
         if state == 'Discharging':
             color = "#000000" if mins_left <= RED_MINS and blink() else "#ff0000" if mins_left <= RED_MINS else "#ffaa00" if mins_left <= ORANGE_MINS else "#00ff00"
             background = "#ff0000" if mins_left <= RED_MINS and blink() else "#000000"
-            text = "🔋{0}%, {1}{2}m on bat".format(percent, "{0}h".format(duration.tm_hour) if duration.tm_hour else '',
-                                                     duration.tm_min)
+            text = "🔋{0}%, {1}{2}m on bat".format(percent, "{0}h".format(hours) if hours else '', mins)
         else:
             color = "#00ff00"
             background = "#000000"
-            text = "{0}%, {1}{2}m to full".format(percent, "{0}h".format(duration.tm_hour) if duration.tm_hour
-                                                           else '', duration.tm_min)
-    else:
-        color = "#ffaa00"
+            text = "🔋{0}%, {1}{2}m to full".format(percent, "{0}h".format(hours) if hours else '', mins)
+    elif state == 'Full':
+        color = "#00ff00"
         background = "#000000"
-        text = "🔋{0}% (?)".format(percent)
+        text = "🔋{0}% {1}".format(percent, state)
+    else:
+        color = "#00ff00"
+        background = "#000000"
+        text = "🔋{0}% {1}".format(percent, state)
     return {
         "color": color,
         "background": background,
+        "short_text": text,
+        "full_text": text,
+        "markup": "none",
+        "separator": True
+    }
+
+def net_latency(host, label=''):
+    if host not in ping_hosts:
+        ping_hosts.append(host)
+    latency = _ping.latency[host] if host in _ping.latency else '?'
+    text = "{0}{1}".format(label, latency)
+    return {
+        "color": "#ffffff",
         "short_text": text,
         "full_text": text,
         "markup": "none",
@@ -216,9 +252,11 @@ def statusbar(*widgets):
 
 statusbar(
     lambda: net('wlp3s0', ''),
+    lambda: net_latency('1.1.1.1', '🌏 '),
     lambda: alsa_volume('♪ {0}', 'Master'),
     lambda: alsa_volume('🎤 {0}', 'Mic'),
-    lambda: pa_volume('♪PA'),
+    lambda: pa_out_volume('♪PA'),
+    #lambda: pa_mic_volume('🎤'),
     lambda: cpu(),
     lambda: free_memory('RAM '),
     lambda: vpn(),
