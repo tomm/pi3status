@@ -19,11 +19,12 @@ blink.on = True
 def cpu_usage():
     while True:
         # 2 1 means: collect cpu usage over 2 seconds, taking 1 reading (and then exiting)
-        raw = os.popen(f"mpstat 2 1").read()
-        percent = int(re.search(
-            r'all\s+(\d+)', raw
-        ).groups()[0])
-        cpu_usage.percent = percent
+        idle_percent = float(list(filter(
+            lambda l: l.startswith('Average:'),
+            os.popen("mpstat 2 1").read().split("\n")
+        ))[0].split()[-1])
+        
+        cpu_usage.percent = int(round(100.0-idle_percent))
         time.sleep(1)
 cpu_usage.percent = 0
 _thread.start_new_thread(cpu_usage, ())
