@@ -45,6 +45,18 @@ def _ping():
 _ping.latency = {}
 _thread.start_new_thread(_ping, ())
 
+def backlight(label: str):
+    raw = os.popen('xbacklight').read()
+    percent = int(round(float(raw)))
+    text = '{0}{1}%'.format(label, percent)
+    return {
+        "color": "#ffffff",
+        "short_text": text,
+        "full_text": text,
+        "markup": "none",
+        "separator": True
+    }
+
 
 def pa_volume(label: str, kind):  # kind: 'sources' | 'sinks'
     raw = os.popen('pactl list {0}'.format(kind)).read().split('\n')
@@ -252,6 +264,7 @@ def statusbar(*widgets):
         blink(toggle=True)
 
 statusbar(
+    lambda: backlight("🌞 "),
     lambda: net('wlp3s0', ''),
     lambda: net_latency('1.1.1.1', '🌏 '),
     lambda: alsa_volume('♪ {0}', 'Master'),
