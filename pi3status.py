@@ -101,7 +101,7 @@ def alsa_volume(format: str, control: str):
     }
 
 def battery():
-    RED_MINS = 20
+    RED_MINS = 30
     ORANGE_MINS = 60
     #Battery 0: Discharging, 19%, 01:08:26 remaining
     raw = os.popen('acpi -b').read()
@@ -118,7 +118,7 @@ def battery():
         mins_left = hours*60 + mins
         if state == 'Discharging':
             color = "#000000" if mins_left <= RED_MINS and blink() else "#ff0000" if mins_left <= RED_MINS else "#ffaa00" if mins_left <= ORANGE_MINS else "#00ff00"
-            background = "#ff0000" if mins_left <= RED_MINS and blink() else "#000000"
+            background = "#ff0000" if mins_left <= RED_MINS and not blink() else "#000000"
             text = "🔋{0}%, {1}{2}m on bat".format(percent, "{0}h".format(hours) if hours else '', mins)
         else:
             color = "#00ff00"
