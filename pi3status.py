@@ -8,6 +8,8 @@ import time
 import re
 import signal
 import _thread
+import pytz
+from datetime import datetime
 
 INTERVAL_SECONDS = 2.0
 
@@ -60,17 +62,16 @@ def backlight(label: str):
 
 def pa_volume(label: str, kind):  # kind: 'sources' | 'sinks'
     raw = os.popen('pactl list {0}'.format(kind)).read().split('\n')
-    vol = re.search(
-        r'(\d+)%',
-        list(filter(lambda l: re.match(r'^Volume', l.strip()), raw))[0]
-    ).groups()[0]
-    muted = len(list(filter(lambda l: re.match(r'^Mute: yes$', l.strip()), raw)))
+    vols = []
+    for v in list(filter(lambda l: re.match(r'^Volume', l.strip()), raw)):
+        vol = re.search(r'(\d+)%', v).groups()[0]
+        muted = len(list(filter(lambda l: re.match(r'^Mute: yes$', l.strip()), raw)))
+        vols.append('muted' if muted else vol+'%')
 
-    text = '{0} {1}'.format(label, 'muted' if muted else vol+'%')
     return {
         "color": "#ffffff",
-        "short_text": text,
-        "full_text": text,
+        "short_text": label + ",".join(vols),
+        "full_text": label + ",".join(vols),
         "markup": "none",
         "separator": True
     }
@@ -167,21 +168,25 @@ def cpu():
 
 def vpn():
     vpn_up = os.path.isdir("/proc/sys/net/ipv4/conf/tun0")
-    text = "VPN {0}".format("ON" if vpn_up else "OFF")
+    net_extender_maybe = os.path.isdir("/proc/sys/net/ipv4/conf/ppp0")
+    vpn_up = vpn_up or net_extender_maybe
+
+    text = "VPN {0}".format("NEX" if net_extender_maybe else "ON" if vpn_up else "OFF")
     return {
-        "color": "#00ff00" if vpn_up else "#000000",
-        "background": "#000000" if vpn_up else "#ff0000",
+        "color": "#000000" if net_extender_maybe else "#00ff00" if vpn_up else "#000000",
+        "background": "#ff7700" if net_extender_maybe else "#000000" if vpn_up else "#ff0000",
         "short_text": text,
         "full_text": text,
         "markup": "none",
         "separator": True
     }
 
-def clock(fmt: str):
+def clock(fmt: str, tz = None):
+    t = datetime.now().strftime(fmt) if tz is None else datetime.now().astimezone(pytz.timezone(tz)).strftime(fmt)
     return {
         "color": "#ffffff",
-        "short_text": time.strftime(fmt),
-        "full_text": time.strftime(fmt),
+        "short_text": t,
+        "full_text": t,
         "markup": "none",
         "separator": True
     }
@@ -265,15 +270,16 @@ def statusbar(*widgets):
 
 statusbar(
     lambda: backlight("🌞 "),
-    lambda: net('wlp3s0', ''),
-    lambda: net_latency('1.1.1.1', '🌏 '),
+    lambda: net('wlp59s0', ''),
+    #lambda: net_latency('1.1.1.1', '🌏 '),
     lambda: alsa_volume('♪ {0}', 'Master'),
-    lambda: alsa_volume('🎤 {0}', 'Mic'),
-    lambda: pa_out_volume('♪PA'),
+    #lambda: alsa_volume('🎤 {0}', 'Mic'),
+    lambda: pa_out_volume('♪PA '),
     #lambda: pa_mic_volume('🎤'),
     lambda: cpu(),
     lambda: free_memory('RAM '),
     lambda: vpn(),
     lambda: battery(),
-    lambda: clock('%d %b %H:%M'),
+    lambda: clock('%-d %b %H:%M'),
+    lambda: clock('%H:%M BR', 'America/Sao_Paulo'),
 )
