@@ -106,9 +106,16 @@ def battery():
     ORANGE_MINS = 60
     #Battery 0: Discharging, 19%, 01:08:26 remaining
     raw = os.popen('acpi -b').read()
-    state, percent = re.search(
+
+    re_bat = re.search(
         r'(\w+), (\d+)%', raw
-    ).groups()
+    )
+    if re_bat is None:
+        state = "No battery"
+        percent = 0
+    else:
+        state, percent = re_bat.groups()
+
     duration = re.search(
         r'(\d\d):(\d\d):(\d\d)', raw
     )
@@ -129,6 +136,10 @@ def battery():
         color = "#00ff00"
         background = "#000000"
         text = "🔋{0}% {1}".format(percent, state)
+    elif state == 'No battery':
+        color = "#ff7f00"
+        background = "#000000"
+        text = "🔋No battery"
     else:
         color = "#00ff00"
         background = "#000000"
