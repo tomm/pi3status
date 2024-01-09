@@ -8,10 +8,11 @@ import time
 import re
 import signal
 import _thread
-import pytz
+#import pytz
+import pytz_deprecation_shim as pytz
 from datetime import datetime
 
-INTERVAL_SECONDS = 2.0
+INTERVAL_SECONDS = 5.0
 
 def blink(toggle=False):
     blink.on = not blink.on
@@ -48,7 +49,7 @@ _ping.latency = {}
 _thread.start_new_thread(_ping, ())
 
 def backlight(label: str):
-    raw = os.popen('xbacklight').read()
+    raw = os.popen('xbacklight -getf').read()
     percent = int(round(float(raw)))
     text = '{0}{1}%'.format(label, percent)
     return {
@@ -60,27 +61,27 @@ def backlight(label: str):
     }
 
 
-def pa_volume(label: str, kind):  # kind: 'sources' | 'sinks'
-    raw = os.popen('pactl list {0}'.format(kind)).read().split('\n')
-    vols = []
-    for v in list(filter(lambda l: re.match(r'^Volume', l.strip()), raw)):
-        vol = re.search(r'(\d+)%', v).groups()[0]
-        muted = len(list(filter(lambda l: re.match(r'^Mute: yes$', l.strip()), raw)))
-        vols.append('muted' if muted else vol+'%')
+def pa_out_volume(label: str):
+    vol = os.popen('pamixer --get-volume-human').read().strip()
 
     return {
         "color": "#ffffff",
-        "short_text": label + ",".join(vols),
-        "full_text": label + ",".join(vols),
+        "short_text": "%s%s" % (label, vol),
+        "full_text": "%s%s" % (label, vol),
         "markup": "none",
         "separator": True
     }
 
-def pa_mic_volume(label: str):
-    return pa_volume(label, 'sources')
+def pa_in_volume(label: str):
+    vol = os.popen('pamixer --default-source --get-volume-human').read().strip()
 
-def pa_out_volume(label: str):
-    return pa_volume(label, 'sinks')
+    return {
+        "color": "#ffffff",
+        "short_text": "%s%s" % (label, vol),
+        "full_text": "%s%s" % (label, vol),
+        "markup": "none",
+        "separator": True
+    }
 
 def alsa_volume(format: str, control: str):
     raw = os.popen('amixer -c0 get {0}'.format(control)).read()
@@ -178,14 +179,14 @@ def cpu():
     }
 
 def vpn():
-    vpn_up = os.path.isdir("/proc/sys/net/ipv4/conf/tun0")
-    net_extender_maybe = os.path.isdir("/proc/sys/net/ipv4/conf/ppp0")
-    vpn_up = vpn_up or net_extender_maybe
+    raw = os.popen('ip -4 -o address | grep wg').read().strip()
 
-    text = "VPN {0}".format("NEX" if net_extender_maybe else "ON" if vpn_up else "OFF")
+    vpn_up = len(raw) > 0
+
+    text = "VPN {0}".format(raw.split()[1] if vpn_up else "OFF")
     return {
-        "color": "#000000" if net_extender_maybe else "#00ff00" if vpn_up else "#000000",
-        "background": "#ff7700" if net_extender_maybe else "#000000" if vpn_up else "#ff0000",
+        "color": "#00ff00" if vpn_up else "#000000",
+        "background": "#000000" if vpn_up else "#ff0000",
         "short_text": text,
         "full_text": text,
         "markup": "none",
@@ -228,8 +229,10 @@ def net(device: str, label: str=None):
     prev_tx = net.tx[device] if device in net.tx else _get_up_dn_net_transferred(device) 
     now_tx = _get_up_dn_net_transferred(device)
     elapsed = now_tx[2] - prev_tx[2]
-    text = "{0}↓{1:,.0f} ↑{2:,.0f} KiB/s".format(
-        label + ' ' if label else '',
+    essid = os.popen('iwgetid -r').read().strip() if device.startswith('wlp') else ''
+
+    text = "{0}↓{1:,.0f} ↑{2:,.0f} KiB".format(
+        label + essid + ' ' if label else essid,
         (now_tx[1] - prev_tx[1]) / (1024*elapsed),
         (now_tx[0] - prev_tx[0]) / (1024*elapsed)
     )
@@ -281,12 +284,13 @@ def statusbar(*widgets):
 
 statusbar(
     lambda: backlight("🌞 "),
-    lambda: net('wlp59s0', ''),
+    lambda: net('wlp3s0', '🛜'),
+    lambda: net('enp0s25', '🖧'),
     #lambda: net_latency('1.1.1.1', '🌏 '),
-    lambda: alsa_volume('♪ {0}', 'Master'),
+    #lambda: alsa_volume('♪ {0}', 'Master'),
     #lambda: alsa_volume('🎤 {0}', 'Mic'),
-    lambda: pa_out_volume('♪PA '),
-    #lambda: pa_mic_volume('🎤'),
+    lambda: pa_out_volume('♪ '),
+    lambda: pa_in_volume('🎤 '),
     lambda: cpu(),
     lambda: free_memory('RAM '),
     lambda: vpn(),
